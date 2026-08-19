@@ -1,0 +1,9 @@
+@echo off
+echo Starting the Ticketing API Engine...
+docker-compose up -d
+
+echo Waiting for services to boot up...
+timeout /t 5 /nobreak > NUL
+
+echo Opening Swagger UI...
+start http://127.0.0.1:8000/docs
