@@ -11,6 +11,17 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
+# --- ADDED: The missing GET endpoint to list events ---
+@router.get("/", response_model=list[EventResponse])
+async def list_events(db: AsyncSession = Depends(get_db)):
+    """
+    Fetch all available events to display on the React dashboard.
+    """
+    result = await db.execute(select(Event))
+    events = result.scalars().all()
+    return events
+# ------------------------------------------------------
+
 @router.post("/", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(
     event_in: EventCreate,

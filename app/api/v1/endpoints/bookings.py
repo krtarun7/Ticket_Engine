@@ -7,7 +7,7 @@ import redis.asyncio as redis
 
 from app.db.session import get_db
 from app.api.deps import get_current_user, get_redis
-from app.models.models import Booking, User, BookingStatus
+from app.models.models import Booking, User, BookingStatus, Seat
 from app.schemas.booking import BookingCreate, BookingResponse
 
 router = APIRouter()
@@ -31,7 +31,16 @@ async def create_booking(
         )
         
     try:
-        # 3. Check if the seat is already booked in PostgreSQL
+        # 3. Fetch the Seat to get the required event_id
+        seat_result = await db.execute(
+            select(Seat).where(Seat.id == booking_in.seat_id)
+        )
+        seat = seat_result.scalar_one_or_none()
+        
+        if not seat:
+            raise HTTPException(status_code=404, detail="Seat not found")
+
+        # 4. Check if the seat is already booked in PostgreSQL
         booking_result = await db.execute(
             select(Booking).where(Booking.seat_id == booking_in.seat_id)
         )
@@ -40,9 +49,10 @@ async def create_booking(
         if existing_booking and existing_booking.status in [BookingStatus.CONFIRMED, BookingStatus.PENDING]:
             raise HTTPException(status_code=400, detail="Seat is already booked")
 
-        # 4. Create the new booking
+        # 5. Create the new booking with the missing event_id
         new_booking = Booking(
             user_id=current_user.id,
+            event_id=seat.event_id, 
             seat_id=booking_in.seat_id,
             status=BookingStatus.PENDING,
             idempotency_key=str(uuid.uuid4()), 
@@ -54,5 +64,19 @@ async def create_booking(
         
         return new_booking
     finally:
-        # 5. Always release the Redis lock, even if an error occurs!
+        # 6. Always release the Redis lock, even if an error occurs!
         await redis_client.delete(lock_key)
+
+@router.get("/my-bookings", response_model=list[BookingResponse])
+async def get_my_bookings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fetches all bookings (both pending and confirmed) belonging to the currently logged-in user.
+    """
+    result = await db.execute(
+        select(Booking).where(Booking.user_id == current_user.id)
+    )
+    bookings = result.scalars().all()
+    return bookings
