@@ -8,7 +8,6 @@ from app.db.session import get_db
 from app.models.models import Booking, Seat, BookingStatus, SeatStatus, User
 from app.core.payment import create_order, verify_signature
 from app.core.qr_service import generate_ticket_qr
-from app.core.email_service import send_ticket_confirmation_email
 
 router = APIRouter()
 
